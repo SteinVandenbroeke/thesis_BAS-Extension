@@ -55,9 +55,15 @@ def get_img_path(img_name, voc12_root):
         img_name = decode_int_filename(img_name)
     return os.path.join(voc12_root, IMG_FOLDER_NAME, img_name + '.jpg')
 
+def remove_prefix_str(text):
+    if isinstance(text, bytes):
+        text = text.decode('utf-8')
+
+    return text.replace('_', '')
+
 def load_img_name_list(dataset_path):
 
-    img_name_list = np.loadtxt(dataset_path, dtype=np.int32)
+    img_name_list = np.loadtxt(dataset_path, dtype=int, converters={0: remove_prefix_str})
 
     return img_name_list
 

@@ -74,7 +74,7 @@ class ResNetCam(nn.Module):
     def __init__(self, block, layers, num_classes=1000,
                  large_feature_map=True):
         super(ResNetCam, self).__init__()
-        self.num_classes = 20
+        self.num_classes = num_classes # Modified here to use the argument
         stride_l3 = 1 if large_feature_map else 2
         self.inplanes = 64
 
@@ -195,8 +195,14 @@ class ResNetCam(nn.Module):
         p_label_one_hot = torch.zeros(batch,self.num_classes).cuda()
         for i in range(batch):
             p_batch_label = torch.nonzero(label[i]).squeeze(-1)
-            p_batch_label_random = random.randint(0,len(p_batch_label)-1)
-            p_batch_label_random = p_batch_label[p_batch_label_random]
+            if len(p_batch_label) > 0:
+                p_batch_label_random = random.randint(0,len(p_batch_label)-1)
+                p_batch_label_random = p_batch_label[p_batch_label_random]
+            else:
+                # Handle empty label case
+                print(f"Warning: Image at batch index {i} has no positive labels. Assigning a dummy label 0.")
+                p_batch_label_random = 0 # Assign a dummy label (e.g., class 0)
+
             p_label[i] = p_batch_label_random
             p_label_one_hot[i][p_batch_label_random] = 1
         p_label = p_label.long()
@@ -235,17 +241,19 @@ def remove_layer(state_dict, keyword):
 def load_pretrained_model(model):
     strict_rule = True
 
-    state_dict = torch.load('sess/resnet50-19c8e357.pth')
-
-    state_dict = remove_layer(state_dict, 'fc')
-    strict_rule = False
-
-    model.load_state_dict(state_dict, strict=strict_rule)
+    try:
+        state_dict = torch.load('sess/resnet50-19c8e357.pth')
+        state_dict = remove_layer(state_dict, 'fc')
+        strict_rule = False
+        model.load_state_dict(state_dict, strict=strict_rule)
+    except FileNotFoundError:
+        print("Warning: Pretrained weights not found at 'sess/resnet50-19c8e357.pth'. Starting from scratch.")
+        # Alternatively, we could download it here using torch.utils.model_zoo
     return model
 
 
-def model(pretrained=True):
-    model = ResNetCam(Bottleneck, [3, 4, 6, 3])
+def model(num_classes=20, pretrained=True): # Modified here to accept num_classes
+    model = ResNetCam(Bottleneck, [3, 4, 6, 3], num_classes=num_classes)
     if pretrained:
         model = load_pretrained_model(model)
     return model

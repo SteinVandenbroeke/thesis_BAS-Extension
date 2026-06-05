@@ -2,11 +2,10 @@
 import os
 import numpy as np
 import imageio
-
+import voc12.dataloader
 from torch import multiprocessing
 from torch.utils.data import DataLoader
 from PIL import Image
-import voc12.dataloader
 from misc import torchutils, imutils
 
 palette = [0,0,0,  128,0,0,  0,128,0,  128,128,0,  0,0,128,  128,0,128,  0,128,128,  128,128,128,
@@ -21,7 +20,10 @@ def _work(process_id, infer_dataset, args):
     infer_data_loader = DataLoader(databin, shuffle=False, num_workers=0, pin_memory=False)
 
     for iter, pack in enumerate(infer_data_loader):
-        img_name = voc12.dataloader.decode_int_filename(pack['name'][0])
+        if args.dataset == 'coco':
+            img_name = pack['name'][0]
+        else:
+            img_name = voc12.dataloader.decode_int_filename(pack['name'][0])
         img = pack['img'][0].numpy()
         cam_dict = np.load(os.path.join(args.cam_out_dir, img_name + '.npy'), allow_pickle=True).item()
         
@@ -53,7 +55,13 @@ def _work(process_id, infer_dataset, args):
             print("%d " % ((5 * iter + 1) // (len(databin) // 20)), end='')
 
 def run(args):
-    dataset = voc12.dataloader.VOC12ImageDataset(args.train_list, voc12_root=args.voc12_root, img_normal=None, to_torch=False)
+    if args.dataset == 'coco':
+        import coco.dataloader
+        dataset = coco.dataloader.COCOImageDataset(args.train_list, coco_root=args.coco_root, img_normal=None, to_torch=False)
+    else:
+        import voc12.dataloader
+        dataset = voc12.dataloader.VOC12ImageDataset(args.train_list, voc12_root=args.voc12_root, img_normal=None, to_torch=False)
+
     dataset = torchutils.split_dataset(dataset, args.num_workers)
 
     print('[ ', end='')

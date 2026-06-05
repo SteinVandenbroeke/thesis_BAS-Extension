@@ -9,16 +9,18 @@ if __name__ == '__main__':
 
     # Environment
     parser.add_argument("--num_workers", default=os.cpu_count()//2, type=int)
+    parser.add_argument("--coco_root", default='/home2/wpy/WSSS/COCO/', type=str,
+                        help="Path to COCO.")
     parser.add_argument("--voc12_root", default='/home2/wpy/WSSS/VOC2012/', type=str,
                         help="Path to VOC 2012 Devkit, must contain ./JPEGImages as subdirectory.")
 
     # Dataset
-    parser.add_argument("--train_list", default="voc12/train_aug.txt", type=str)
-    parser.add_argument("--val_list", default="voc12/val.txt", type=str)
-    parser.add_argument("--infer_list", default="voc12/train.txt", type=str,
-                        help="voc12/train_aug.txt to train a fully supervised model, "
-                             "voc12/train.txt or voc12/val.txt to quickly check the quality of the labels.")
+    parser.add_argument('--dataset', type=str, default='coco', choices=['coco', 'voc'])
+    parser.add_argument("--train_list", default="coco/train.txt", type=str)
+    parser.add_argument("--val_list", default="coco/val.txt", type=str)
+    parser.add_argument("--infer_list", default="coco/train.txt", type=str)
     parser.add_argument("--chainer_eval_set", default="train", type=str)
+    parser.add_argument("--num_classes", default=20, type=int)
 
     # Class Activation Map
     parser.add_argument("--cam_network", default="net.resnet50_bas", type=str)
@@ -67,6 +69,11 @@ if __name__ == '__main__':
     parser.add_argument("--eval_sem_seg_pass", default=True)
 
     args = parser.parse_args()
+
+    if args.dataset == 'voc':
+        args.train_list = "voc12/train_aug.txt"
+        args.val_list = "voc12/val.txt"
+        args.infer_list = "voc12/train.txt"
 
     os.makedirs("sess", exist_ok=True)
     os.makedirs(args.cam_out_dir, exist_ok=True)

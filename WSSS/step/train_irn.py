@@ -3,28 +3,50 @@ import torch
 from torch.backends import cudnn
 cudnn.enabled = True
 from torch.utils.data import DataLoader
-import voc12.dataloader
 from misc import pyutils, torchutils, indexing
 import importlib
 from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
+
 def run(args):
+    if args.dataset == 'coco':
+        import coco.dataloader as dataloader
+        root = args.coco_root
+    else:
+        import voc12.dataloader as dataloader
+        root = args.voc12_root
 
     path_index = indexing.PathIndex(radius=10, default_size=(args.irn_crop_size // 4, args.irn_crop_size // 4))
 
     model = getattr(importlib.import_module(args.irn_network), 'AffinityDisplacementLoss')(
         path_index)
 
-    train_dataset = voc12.dataloader.VOC12AffinityDataset(args.train_list,
-                                                          label_dir=args.ir_label_out_dir,
-                                                          voc12_root=args.voc12_root,
-                                                          indices_from=path_index.src_indices,
-                                                          indices_to=path_index.dst_indices,
-                                                          hor_flip=True,
-                                                          crop_size=args.irn_crop_size,
-                                                          crop_method="random",
-                                                          rescale=(0.5, 1.5)
-                                                          )
+    if args.dataset == 'coco':
+        # Affinity dataset for COCO is not implemented, using VOC12 for now.
+        # This should be replaced with a COCO-specific affinity dataset.
+        print("Warning: COCO Affinity Dataset not implemented. Using VOC12 for IRN training.")
+        import voc12.dataloader
+        train_dataset = voc12.dataloader.VOC12AffinityDataset(args.train_list,
+                                                              label_dir=args.ir_label_out_dir,
+                                                              voc12_root=args.voc12_root,
+                                                              indices_from=path_index.src_indices,
+                                                              indices_to=path_index.dst_indices,
+                                                              hor_flip=True,
+                                                              crop_size=args.irn_crop_size,
+                                                              crop_method="random",
+                                                              rescale=(0.5, 1.5)
+                                                              )
+    else:
+        train_dataset = dataloader.VOC12AffinityDataset(args.train_list,
+                                                              label_dir=args.ir_label_out_dir,
+                                                              voc12_root=root,
+                                                              indices_from=path_index.src_indices,
+                                                              indices_to=path_index.dst_indices,
+                                                              hor_flip=True,
+                                                              crop_size=args.irn_crop_size,
+                                                              crop_method="random",
+                                                              rescale=(0.5, 1.5)
+                                                              )
     train_data_loader = DataLoader(train_dataset, batch_size=args.irn_batch_size,
                                    shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True)
 
@@ -85,10 +107,16 @@ def run(args):
         else:
             timer.reset_stage()
 
-    infer_dataset = voc12.dataloader.VOC12ImageDataset(args.infer_list,
-                                                       voc12_root=args.voc12_root,
-                                                       crop_size=args.irn_crop_size,
-                                                       crop_method="top_left")
+    if args.dataset == 'coco':
+        infer_dataset = dataloader.COCOImageDataset(args.infer_list,
+                                                           coco_root=root,
+                                                           crop_size=args.irn_crop_size,
+                                                           crop_method="top_left")
+    else:
+        infer_dataset = dataloader.VOC12ImageDataset(args.infer_list,
+                                                           voc12_root=root,
+                                                           crop_size=args.irn_crop_size,
+                                                           crop_method="top_left")
     infer_data_loader = DataLoader(infer_dataset, batch_size=args.irn_batch_size,
                                    shuffle=False, num_workers=args.num_workers, pin_memory=True, drop_last=True)
 

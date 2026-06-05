@@ -8,7 +8,6 @@ import numpy as np
 import importlib
 import os
 
-import voc12.dataloader
 from misc import torchutils, imutils
 
 cudnn.enabled = True
@@ -84,20 +83,31 @@ def _work(process_id, model,model_ori, dataset, args):
                 print("%d " % ((5*iter+1)//(len(databin) // 20)), end='')
 
 def run(args):
-    model_ori = getattr(importlib.import_module("net.resnet50_cam"), 'CAM')()
-    model_ori.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
+    if args.dataset == 'coco':
+        import coco.dataloader
+        num_classes = 80
+    else:
+        import voc12.dataloader
+        num_classes = 20
+
+    model_ori = getattr(importlib.import_module(args.cam_network), 'model')(num_classes=args.num_classes)
+    model_ori.load_state_dict(torch.load(args.cam_weights_name), strict=True)
     model_ori.eval()
 
-    model = getattr(importlib.import_module(args.cam_network), 'model')(args)
-    checkpoint = torch.load('sess/epoch_10.pth.tar')  
-    pretrained_dict = {k[7:]: v for k, v in checkpoint.items()}
-    model.load_state_dict(pretrained_dict)
+    model = getattr(importlib.import_module(args.cam_network), 'model')(num_classes=num_classes)
+    checkpoint = torch.load(args.cam_weights_name)
+    #pretrained_dict = {k[7:]: v for k, v in checkpoint.items()}
+    model.load_state_dict(checkpoint)
     model.eval()
 
     n_gpus = torch.cuda.device_count()
 
-    dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
-                                                             voc12_root=args.voc12_root, scales=args.cam_scales)
+    if args.dataset == 'coco':
+        dataset = coco.dataloader.COCOClassificationDatasetMSF(args.train_list,
+                                                                 coco_root=args.coco_root, scales=args.cam_scales)
+    else:
+        dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
+                                                                 voc12_root=args.voc12_root, scales=args.cam_scales)
     dataset = torchutils.split_dataset(dataset, n_gpus)
 
     print('[ ', end='')
