@@ -335,3 +335,121 @@ class COCOClassificationDatasetMSF(COCOClassificationDataset):
                "size": (img.shape[0], img.shape[1]),
                "label": torch.from_numpy(self.cls_labels_dict[name])}
         return out
+
+# 1. The Helper Class
+class COCOGetAffinityLabelFromIndices():
+    def __init__(self, indices_from, indices_to, num_classes=81):
+        self.indices_from = indices_from
+        self.indices_to = indices_to
+        self.num_classes = num_classes
+
+    def __call__(self, segm_map):
+        segm_map_flat = np.reshape(segm_map, -1)
+
+        segm_label_from = np.expand_dims(segm_map_flat[self.indices_from], axis=0)
+        segm_label_to = segm_map_flat[self.indices_to]
+
+        valid_label = np.logical_and(np.less(segm_label_from, self.num_classes), np.less(segm_label_to, self.num_classes))
+
+        equal_label = np.equal(segm_label_from, segm_label_to)
+
+        pos_affinity_label = np.logical_and(equal_label, valid_label)
+
+        bg_pos_affinity_label = np.logical_and(pos_affinity_label, np.equal(segm_label_from, 0)).astype(np.float32)
+        fg_pos_affinity_label = np.logical_and(pos_affinity_label, np.greater(segm_label_from, 0)).astype(np.float32)
+
+        neg_affinity_label = np.logical_and(np.logical_not(equal_label), valid_label).astype(np.float32)
+
+        return torch.from_numpy(bg_pos_affinity_label), torch.from_numpy(fg_pos_affinity_label), \
+               torch.from_numpy(neg_affinity_label)
+
+# 2. The Missing Parent Class
+class COCOSegmentationDataset(Dataset):
+    def __init__(self, img_name_list_path, label_dir, crop_size, coco_root,
+                 rescale=None, img_normal=TorchvisionNormalize(), hor_flip=False,
+                 crop_method='random'):
+
+        raw_img_name_list = load_img_name_list(img_name_list_path)
+        self.coco_root = coco_root
+        self.label_dir = label_dir
+        self.rescale = rescale
+        self.crop_size = crop_size
+        self.img_normal = img_normal
+        self.hor_flip = hor_flip
+        self.crop_method = crop_method
+
+        # --- Filter out missing images and labels ---
+        print("Validating dataset files... this might take a moment.")
+        self.img_name_list = []
+        missing_count = 0
+
+        for name in raw_img_name_list:
+            img_path = get_img_path(name, self.coco_root)
+            label_path = os.path.join(self.label_dir, name + '.png')
+
+            # Check if BOTH the raw image and the generated pseudo-label exist
+            if img_path and os.path.exists(img_path) and os.path.exists(label_path):
+                self.img_name_list.append(name)
+            else:
+                missing_count += 1
+
+        print(f"Dataset initialized: {len(self.img_name_list)} valid samples. Skipped {missing_count} missing samples.")
+
+    def __len__(self):
+        return len(self.img_name_list)
+
+    def __getitem__(self, idx):
+        name = self.img_name_list[idx]
+
+        img_path = get_img_path(name, self.coco_root)
+        try:
+            img = np.asarray(imageio.imread(img_path))
+            if img.ndim == 2:
+                img = np.stack((img,) * 3, axis=-1)
+        except FileNotFoundError:
+            # We shouldn't hit this anymore due to pre-filtering, but keeping it as a fallback
+            print(f"FATAL: Image not found at {img_path}")
+            img = np.zeros((self.crop_size or 224, self.crop_size or 224, 3), dtype=np.uint8)
+
+        label_path = os.path.join(self.label_dir, name + '.png')
+        label = imageio.imread(label_path)
+
+        if self.rescale:
+            img, label = imutils.random_scale((img, label), scale_range=self.rescale, order=(3, 0))
+
+        if self.img_normal:
+            img = self.img_normal(img)
+
+        if self.hor_flip:
+            img, label = imutils.random_lr_flip((img, label))
+
+        if self.crop_method == "random":
+            img, label = imutils.random_crop((img, label), self.crop_size, (0, 255))
+        else:
+            img = imutils.top_left_crop(img, self.crop_size, 0)
+            label = imutils.top_left_crop(label, self.crop_size, 255)
+
+        img = imutils.HWC_to_CHW(img)
+
+        return {'name': name, 'img': img, 'label': label}
+
+# 3. The Child Class (which threw the error)
+class COCOAffinityDataset(COCOSegmentationDataset):
+    def __init__(self, img_name_list_path, label_dir, crop_size, coco_root,
+                 indices_from, indices_to,
+                 rescale=None, img_normal=TorchvisionNormalize(), hor_flip=False, crop_method=None):
+        super().__init__(img_name_list_path, label_dir, crop_size, coco_root, rescale, img_normal, hor_flip, crop_method=crop_method)
+
+        self.extract_aff_lab_func = COCOGetAffinityLabelFromIndices(indices_from, indices_to, num_classes=N_CAT + 1)
+
+    def __len__(self):
+        return len(self.img_name_list)
+
+    def __getitem__(self, idx):
+        out = super().__getitem__(idx)
+
+        reduced_label = imutils.pil_rescale(out['label'], 0.25, 0)
+
+        out['aff_bg_pos_label'], out['aff_fg_pos_label'], out['aff_neg_label'] = self.extract_aff_lab_func(reduced_label)
+
+        return out

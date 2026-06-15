@@ -2,11 +2,11 @@
 import os
 import numpy as np
 import imageio
-import voc12.dataloader
 from torch import multiprocessing
 from torch.utils.data import DataLoader
 from PIL import Image
 from misc import torchutils, imutils
+from tqdm import tqdm
 
 palette = [0,0,0,  128,0,0,  0,128,0,  128,128,0,  0,0,128,  128,0,128,  0,128,128,  128,128,128,
 					 64,0,0,  192,0,0,  64,128,0,  192,128,0,  64,0,128,  192,0,128,  64,128,128,  192,128,128,
@@ -19,14 +19,24 @@ def _work(process_id, infer_dataset, args):
     databin = infer_dataset[process_id]
     infer_data_loader = DataLoader(databin, shuffle=False, num_workers=0, pin_memory=False)
 
-    for iter, pack in enumerate(infer_data_loader):
+    for iter, pack in enumerate(tqdm(infer_data_loader)):
         if args.dataset == 'coco':
             img_name = pack['name'][0]
         else:
+            import voc12.dataloader
             img_name = voc12.dataloader.decode_int_filename(pack['name'][0])
         img = pack['img'][0].numpy()
-        cam_dict = np.load(os.path.join(args.cam_out_dir, img_name + '.npy'), allow_pickle=True).item()
-        
+
+        if not os.path.exists(os.path.join(args.cam_out_dir, img_name + '.npy')):
+            print("path does not exist: {}".format(os.path.join(args.cam_out_dir, img_name + '.npy')))
+            continue
+
+        try:
+            cam_dict = np.load(os.path.join(args.cam_out_dir, img_name + '.npy'), allow_pickle=True).item()
+        except:
+            print("path is broken: {}".format(os.path.join(args.cam_out_dir, img_name + '.npy')))
+            continue
+
         cams = cam_dict['high_res']
         keys = np.pad(cam_dict['keys'] + 1, (1, 0), mode='constant')
         

@@ -8,4 +8,6 @@ python3 run_sample.py \
     --infer_list ../../../datasets/coco_dataset/coco2017/train2017 \
     --num_classes 80 \
     --cam_network net.resnet50_bas \
-    --cam_weights_name sess/resnet50_bas/epoch_10.pth.tar
+    --cam_weights_name sess/resnet50_bas/epoch_10.pth.tar  \
+    --cam_batch_size 16  \
+    --irn_weights_name res50_irn_coco.pth

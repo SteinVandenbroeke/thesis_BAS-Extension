@@ -40,7 +40,7 @@ if __name__ == '__main__':
     # Inter-pixel Relation Network (IRNet)
     parser.add_argument("--irn_network", default="net.resnet50_irn", type=str)
     parser.add_argument("--irn_crop_size", default=512, type=int)
-    parser.add_argument("--irn_batch_size", default=32, type=int)
+    parser.add_argument("--irn_batch_size", default=16, type=int)
     parser.add_argument("--irn_num_epoches", default=3, type=int)
     parser.add_argument("--irn_learning_rate", default=0.1, type=float)
     parser.add_argument("--irn_weight_decay", default=1e-4, type=float)
@@ -56,13 +56,13 @@ if __name__ == '__main__':
     parser.add_argument("--log_name", default="sample_train_eval", type=str)
     parser.add_argument("--cam_weights_name", default="sess/res50_cam.pth", type=str)
     parser.add_argument("--irn_weights_name", default="sess/res50_irn.pth", type=str)
-    parser.add_argument("--cam_out_dir", default="result/cam", type=str)
-    parser.add_argument("--ir_label_out_dir", default="result/ir_label", type=str)
-    parser.add_argument("--sem_seg_out_dir", default="result/sem_seg", type=str)
+    parser.add_argument("--cam_out_dir", default="/mnt/smb_Stein/thesis_results/thesis_BAS-Extension/result/cam", type=str)
+    parser.add_argument("--ir_label_out_dir", default="/mnt/smb_Stein/thesis_results/thesis_BAS-Extension/result/ir_label", type=str)
+    parser.add_argument("--sem_seg_out_dir", default="/mnt/smb_Stein/thesis_results/thesis_BAS-Extension/result/sem_seg", type=str)
 
     # Step
-    parser.add_argument("--make_cam_pass", default=True)
-    parser.add_argument("--eval_cam_pass", default=True)
+    parser.add_argument("--make_cam_pass", default=False)
+    parser.add_argument("--eval_cam_pass", default=False)
     parser.add_argument("--cam_to_ir_label_pass", default=False)
     parser.add_argument("--train_irn_pass", default=False)
     parser.add_argument("--make_sem_seg_pass", default=True)
@@ -121,6 +121,7 @@ if __name__ == '__main__':
         timer = pyutils.Timer('step.make_sem_seg_labels:')
         step.make_sem_seg_labels.run(args)
 
+    print("eval_sem_seg")
     if args.eval_sem_seg_pass is True:
         import step.eval_sem_seg
 

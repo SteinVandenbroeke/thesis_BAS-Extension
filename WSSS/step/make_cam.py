@@ -7,7 +7,7 @@ from torch.backends import cudnn
 import numpy as np
 import importlib
 import os
-
+from tqdm import tqdm
 from misc import torchutils, imutils
 
 cudnn.enabled = True
@@ -23,11 +23,13 @@ def _work(process_id, model,model_ori, dataset, args):
         model.cuda()
         model_ori.cuda()
 
-        for iter, pack in enumerate(data_loader):
-
+        for iter, pack in enumerate(tqdm(data_loader, position=process_id, desc=f"GPU {process_id}")):
             img_name = pack['name'][0]
-            label = pack['label'][0] 
+            label = pack['label'][0]
             size = pack['size']
+
+            if os.path.exists(os.path.join(args.cam_out_dir, img_name + '.npy')):
+                continue
 
             strided_size = imutils.get_strided_size(size, 4)
             strided_up_size = imutils.get_strided_up_size(size, 16)
